@@ -1,0 +1,12 @@
+# Data
+data/
+
+# Virtual Environment
+venv/
+
+# Python Bytecode
+__pycache__/
+*.pyc
+
+# OS specific
+.DS_Store
