@@ -8,17 +8,17 @@ The project utilizes a structured pipeline to process retail data (inspired by t
 
 ```mermaid
 graph TD
-    A[Data Ingestion: Sales, Prices, Calendar] --> B[Data Preprocessing: Melt & Aggregate]
-    B --> C[Feature Engineering: Lags & Categorical Encoding]
-    C --> D{Analysis Pipeline}
-    D --> E[Naive Baseline: Standard OLS]
-    D --> F[Double ML Framework]
-    F --> G[Nuisance Model 1: E[Outcome | Controls] via LightGBM]
-    F --> H[Nuisance Model 2: E[Treatment | Controls] via LightGBM]
-    G --> I[Residualization & Cross-Fitting]
+    A["Data Ingestion: Sales, Prices, Calendar"] --> B["Data Preprocessing: Melt & Aggregate"]
+    B --> C["Feature Engineering: Lags & Categorical Encoding"]
+    C --> D{"Analysis Pipeline"}
+    D --> E["Naive Baseline: Standard OLS"]
+    D --> F["Double ML Framework"]
+    F --> G["Nuisance Model 1: E[Outcome | Controls] via LightGBM"]
+    F --> H["Nuisance Model 2: E[Treatment | Controls] via LightGBM"]
+    G --> I["Residualization & Cross-Fitting"]
     H --> I
-    I --> J[Causal Elasticity Estimation]
-    E --> K[Final Evaluation & Comparison]
+    I --> J["Causal Elasticity Estimation"]
+    E --> K["Final Evaluation & Comparison"]
     J --> K
 ```
 
