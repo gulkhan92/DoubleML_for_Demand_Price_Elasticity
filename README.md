@@ -4,14 +4,39 @@ This repository is intended to provide a baseline for hands-on practice with cau
 
 The project utilizes a structured pipeline to process retail data (inspired by the M5 Forecasting competition format), engineer relevant features, and apply the Partially Linear Regression (PLR) DML model to obtain unbiased estimates of price elasticity.
 
+## Process Flow
+
+```mermaid
+graph TD
+    A[Data Ingestion: Sales, Prices, Calendar] --> B[Data Preprocessing: Melt & Aggregate]
+    B --> C[Feature Engineering: Lags & Categorical Encoding]
+    C --> D{Analysis Pipeline}
+    D --> E[Naive Baseline: Standard OLS]
+    D --> F[Double ML Framework]
+    F --> G[Nuisance Model 1: E[Outcome | Controls] via LightGBM]
+    F --> H[Nuisance Model 2: E[Treatment | Controls] via LightGBM]
+    G --> I[Residualization & Cross-Fitting]
+    H --> I
+    I --> J[Causal Elasticity Estimation]
+    E --> K[Final Evaluation & Comparison]
+    J --> K
+```
+
 ## Project Overview
 
 In retail analytics, estimating the effect of price on quantity sold is often confounded by seasonality, promotions, and historical trends. Standard OLS regressions often suffer from "omitted variable bias" or "overfitting" when dealing with high-dimensional controls.
 
-This project implements **Double Machine Learning**, a method that:
-1.  Uses flexible ML models (LightGBM) to learn the conditional expectation of outcomes ($Y$) and treatments ($T$).
-2.  "Partials out" the effect of confounders from both the price and the quantity.
-3.  Estimates the causal coefficient (elasticity) on the residuals, providing a more robust estimate than naive models.
+## ML Model vs. OLS Discussion
+
+### Ordinary Least Squares (OLS)
+Traditional OLS serves as our naive baseline. While computationally efficient and interpretable, it assumes a strictly linear relationship between all variables. In retail data, price changes are often correlated with unobserved factors (like marketing campaigns) or non-linear seasonal trends. If these confounders are not perfectly captured and linearly specified, the OLS estimate of elasticity will be biased and potentially misleading.
+
+### Double Machine Learning (DML) with LightGBM
+This project leverages **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of high-performance ML models—specifically **LightGBM**—to handle the "nuisance" part of the estimation.
+
+1.  **Flexibility**: LightGBM captures complex, non-linear interactions and dependencies between features (e.g., how the impact of a SNAP event changes depending on the month) that would be impossible to specify manually in a linear model.
+2.  **Orthogonalization**: By using ML to predict both the quantity ($Y$) and the price ($T$) based on the controls, and then regressing the residuals, DML "partials out" the influence of confounders. This ensures that the final elasticity estimate is derived only from the variation in price that is *not* explained by other factors.
+3.  **Cross-Fitting**: DML employs K-fold cross-fitting to remove bias introduced by overfitting the ML models, a common pitfall when using flexible learners for causal inference.
 
 ## Repository Structure
 
