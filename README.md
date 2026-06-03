@@ -2,7 +2,7 @@
 
 This repository is intended to provide a baseline for hands-on practice with causal inference techniques, specifically focusing on estimating demand price elasticity using Double Machine Learning (DML). 
 
-The project utilizes a structured pipeline to process retail data (inspired by the M5 Forecasting competition format), engineer relevant features, and apply the Partially Linear Regression (PLR) DML model to obtain unbiased estimates of price elasticity.
+The project utilizes a structured pipeline to process M5 Walmart retail goods sales data (https://www.kaggle.com/competitions/m5-forecasting-accuracy/data), engineer relevant features, and apply the Partially Linear Regression (PLR) DML model to obtain unbiased estimates of price elasticity.
 
 ## Process Flow
 
@@ -32,7 +32,7 @@ In retail analytics, estimating the effect of price on quantity sold is often co
 Traditional OLS serves as our naive baseline. While computationally efficient and interpretable, it assumes a strictly linear relationship between all variables. In retail data, price changes are often correlated with unobserved factors (like marketing campaigns) or non-linear seasonal trends. If these confounders are not perfectly captured and linearly specified, the OLS estimate of elasticity will be biased and potentially misleading.
 
 ### Double Machine Learning (DML) with LightGBM
-This project leverages **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of high-performance ML models—specifically **LightGBM**—to handle the "nuisance" part of the estimation.
+This project uses **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of high performance ML models, specifically **LightGBM** to handle the "nuisance" part of the estimation.
 
 1.  **Flexibility**: LightGBM captures complex, non-linear interactions and dependencies between features (e.g., how the impact of a SNAP event changes depending on the month) that would be impossible to specify manually in a linear model.
 2.  **Orthogonalization**: By using ML to predict both the quantity ($Y$) and the price ($T$) based on the controls, and then regressing the residuals, DML "partials out" the influence of confounders. This ensures that the final elasticity estimate is derived only from the variation in price that is *not* explained by other factors.
@@ -72,7 +72,7 @@ Modify `config.py` to change the target category (default: `FOODS`) or adjust th
 Run the full pipeline with:
 
 ```bash
-python main.py
+python3 main.py
 ```
 
 ## Technical Methodology
