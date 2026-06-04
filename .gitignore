@@ -1,12 +1,13 @@
-# Data
-data/
-
-# Virtual Environment
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 venv/
 
-# Python Bytecode
-__pycache__/
-*.pyc
+# Project Specific Data & Models
+data/
+cache/
 
 # OS specific
 .DS_Store
+.ipynb_checkpoints/

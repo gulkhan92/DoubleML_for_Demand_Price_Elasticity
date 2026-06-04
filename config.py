@@ -6,6 +6,11 @@ SALES_PATH = os.path.join(DATA_DIR, "sales_train_evaluation.csv")
 PRICES_PATH = os.path.join(DATA_DIR, "sell_prices.csv")
 CALENDAR_PATH = os.path.join(DATA_DIR, "calendar.csv")
 
+# Cache Paths
+CACHE_DIR = "cache"
+FEATURES_PATH = os.path.join(CACHE_DIR, "engineered_features.pkl")
+MODELS_DIR = os.path.join(CACHE_DIR, "models")
+
 # Project Scope
 TARGET_CATEGORY = "FOODS"
 MIN_WEEKS_THRESHOLD = 10
@@ -31,7 +36,28 @@ LGBM_PARAMS = {
     "learning_rate": 0.05,
     "num_leaves": 31,
     "importance_type": "gain",
-    "n_jobs": -1,
     "random_state": 42,
-    "verbose": -1
+    "verbose": -1,
+    "device": "cpu",        # LightGBM GPU requires manual compilation on macOS
+    "n_jobs": -1            # Use all M3 performance/efficiency cores
+}
+
+XGB_PARAMS = {
+    "n_estimators": 500,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "objective": "reg:squarederror",
+    "random_state": 42,
+    "tree_method": "hist",
+    "device": "cpu",        # MPS not available in this build, falling back to CPU
+    "n_jobs": -1            # Use all M3 performance/efficiency cores
+}
+
+RF_PARAMS = {
+    "n_estimators": 100,
+    "max_depth": 10,
+    "random_state": 42,
+    "tree_method": "hist",
+    "device": "cpu",        # MPS not available in this build, falling back to CPU
+    "n_jobs": -1            # Use all M3 performance/efficiency cores
 }

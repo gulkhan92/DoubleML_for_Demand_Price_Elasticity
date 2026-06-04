@@ -1,6 +1,8 @@
 pandas
 numpy
 doubleml
-lightgbm
+lightgbm # For LightGBM nuisance models
+xgboost # For XGBoost nuisance models
 statsmodels
-scikit-learn
+scikit-learn # For RandomForestRegressor and general ML utilities
+joblib # For model persistence

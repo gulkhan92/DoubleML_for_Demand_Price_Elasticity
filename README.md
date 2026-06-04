@@ -32,11 +32,30 @@ In retail analytics, estimating the effect of price on quantity sold is often co
 Traditional OLS serves as our naive baseline. While computationally efficient and interpretable, it assumes a strictly linear relationship between all variables. In retail data, price changes are often correlated with unobserved factors (like marketing campaigns) or non-linear seasonal trends. If these confounders are not perfectly captured and linearly specified, the OLS estimate of elasticity will be biased and potentially misleading.
 
 ### Double Machine Learning (DML) with LightGBM
-This project uses **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of high performance ML models, specifically **LightGBM** to handle the "nuisance" part of the estimation.
+This project uses **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of various high-performance ML models to handle the "nuisance" part of the estimation.
 
-1.  **Flexibility**: LightGBM captures complex, non-linear interactions and dependencies between features (e.g., how the impact of a SNAP event changes depending on the month) that would be impossible to specify manually in a linear model.
+1.  **Flexibility**: High-capacity learners like **LightGBM**, **XGBoost**, and **XGBRF** (XGBoost's Random Forest implementation) are chosen for their ability to capture complex, non-linear interactions and dependencies between features (e.g., how the impact of a SNAP event changes depending on the month) that standard linear models often miss.
 2.  **Orthogonalization**: By using ML to predict both the quantity ($Y$) and the price ($T$) based on the controls, and then regressing the residuals, DML "partials out" the influence of confounders. This ensures that the final elasticity estimate is derived only from the variation in price that is *not* explained by other factors.
 3.  **Cross-Fitting**: DML employs K-fold cross-fitting to remove bias introduced by overfitting the ML models, a common pitfall when using flexible learners for causal inference.
+
+### Choice of Nuisance Learners
+The repository compares three distinct learners for the nuisance functions, chosen for their performance characteristics and ability to handle complex data:
+*   **LightGBM**: Known for its speed and efficiency, especially on large datasets, and its ability to handle categorical features effectively. It's a gradient boosting framework that uses tree-based learning algorithms.
+*   **XGBoost**: A highly robust and widely used gradient boosting framework that provides strong regularization to prevent overfitting. It's known for its high performance and flexibility.
+*   **XGBRF (XGBoost Random Forest)**: This is XGBoost's implementation of Random Forest. It's effective at capturing high-order interactions and non-linear relationships without the sequential dependencies of gradient boosting, offering a different ensemble approach.
+
+### Hardware Acceleration (Apple Silicon)
+This implementation is configured for **Apple Silicon (M1/M2/M3)**:
+*   **XGBoost & XGBRF**: Currently configured for highly parallelized CPU execution. 
+    > **Note**: While XGBoost supports `mps` (Metal Performance Shaders) for GPU acceleration on Apple Silicon, your current installation does not seem to have it enabled. To use `mps`, you might need to install a specific build of XGBoost (e.g., from source or a pre-built wheel with MPS support).
+*   **LightGBM**: Currently configured for highly parallelized CPU execution. 
+    > **Note**: To enable LightGBM GPU on M3, you must recompile the library with OpenCL support (`brew install cmake libomp` and follow build instructions).
+
+### Multi-Model Comparison
+The repository compares three distinct learners for the nuisance functions:
+*   **LightGBM**: Optimized for speed and large datasets.
+*   **XGBoost**: Highly robust with strong regularization to prevent over-fitting.
+*   **Random Forest**: Effective at capturing high-order interactions without sequential dependencies.
 
 ## Repository Structure
 
@@ -62,7 +81,7 @@ Ensure you have Python 3.8+ installed. It is recommended to use a virtual enviro
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install pandas numpy doubleml lightgbm scikit-learn
+pip install pandas numpy doubleml lightgbm xgboost scikit-learn
 ```
 
 ### 2. Configuration
@@ -77,35 +96,66 @@ python3 main.py
 
 ## Technical Methodology
 
-The pipeline implements the **Partially Linear Regression (PLR)** framework, which decomposes the relationship between price and demand into a linear causal component and a non-linear nuisance component:
+The model solves the following system:
+1.  $Y = g_0(X, W) + \theta D + \zeta$
+2.  $D = m_0(X, W) + \nu$
 
-1.  $Y = \theta D + g_0(X, W) + \zeta, \quad E[\zeta | D, X, W] = 0$
-2.  $D = m_0(X, W) + \nu, \quad E[\nu | X, W] = 0$
-
-### Methodology Components
-
-*   **Residualization (Robinson's Transformation)**: Instead of regressing $Y$ on $D$ directly, we use LightGBM to estimate the conditional expectations $\hat{l}(X,W) = E[Y|X,W]$ and $\hat{m}(X,W) = E[D|X,W]$. We then compute the residuals: $\tilde{Y} = Y - \hat{l}$ and $\tilde{D} = D - \hat{m}$. The elasticity $\theta$ is estimated by regressing $\tilde{Y}$ on $\tilde{D}$. This "doubly robust" approach ensures that even if one nuisance model is slightly misspecified, the estimate remains consistent.
-*   **Cross-Fitting (DML2)**: To prevent bias from over-fitting the nuisance models to the same data used for elasticity estimation, the repository uses $K$-fold cross-fitting. The nuisance models are trained on $K-1$ folds and used to generate residuals for the $K$-th fold.
-*   **Variable Definitions**:
-    *   **$Y$ (Outcome)**: `log_quantity`.
-    *   **$D$ (Treatment)**: `log_price`.
-    *   **$X, W$ (Confounders)**: High-dimensional controls including seasonality (month), store/dept IDs, and auto-regressive terms (`lag_sales`).
-
-### Why Log-Log?
-In this setup, the coefficient $\theta$ represents the **Constant Elasticity of Demand**:
-
-$$\theta = \frac{\partial \log(Q)}{\partial \log(P)} = \frac{\partial Q / Q}{\partial P / P}$$
-
-This means a 1% increase in price results in a $\theta$% change in quantity sold.
-
-### Identifying Assumptions
-For $\theta$ to have a causal interpretation, the model assumes **Conditional Independence** (Unconfoundedness): all variables that simultaneously affect price and demand (e.g., holidays, past sales momentum) are captured in $W$. By including `lag_sales_1` and `lag_sales_2`, we control for demand shocks that might have influenced pricing decisions.
+Where:
+*   **$Y$ (Outcome)**: `log_quantity` (Log-transformed sales)
+*   **$D$ (Treatment)**: `log_price` (Log-transformed unit price)
+*   **$X$ (Effect Modifiers)**: Fixed effects like `store_id` and `dept_id`.
+*   **$W$ (Controls)**: Confounders including seasonality (`month`), promotional events, and historical demand (`lag_sales`).
+*   **$\theta$**: The coefficient of interest, representing the **Price Elasticity of Demand**.
 
 ## Key Features
 
 *   **Automated Preprocessing**: Handles the "melt" and "merge" operations for complex relational retail data.
-*   **High-Dimensional Control**: Uses LightGBM's gradient boosting to capture non-linearities in $g_0$ and $m_0$ that standard OLS would miss.
-*   **Statistical Rigor**: Provides standard errors and confidence intervals that are valid even when using complex ML learners for the nuisance components.
+*   **Leakage Prevention**: Uses K-fold cross-fitting via the `doubleml` library to prevent overfitting in the nuisance models.
+*   **Elasticity Interpretation**: Since both price and quantity are log-transformed, the resulting coefficient is directly interpretable as elasticity (a 1% change in price leads to a $\theta$% change in quantity).
+
+## Results and Discussion
+
+This section presents the estimated price elasticities from both the naive OLS baseline and the Double Machine Learning models, along with a brief interpretation.
+
+### Naive OLS Results
+The Ordinary Least Squares (OLS) model provides a baseline estimate of the price elasticity by directly regressing `log_quantity` on `log_price`.
+
+```
+--- Naive OLS Results ---
+==============================================================================
+                 coef    std err          t      P>|t|      [0.025      0.975]
+------------------------------------------------------------------------------
+const          1.2671      0.001   2261.176      0.000       1.266       1.268
+log_price     -0.3746      0.000   -783.475      0.000      -0.376      -0.374
+==============================================================================
+```
+
+The OLS estimate for `log_price` is **-0.3746**. This suggests that a 1% increase in price leads to a 0.3746% decrease in quantity sold. While statistically significant (p-value 0.000), this estimate is likely biased due to unaddressed confounding factors (e.g., seasonality, promotions, historical demand) that simultaneously influence both price and quantity. OLS struggles to isolate the true causal effect in such complex scenarios.
+
+### Double Machine Learning (DML) Results
+The DML framework, using various machine learning models as nuisance learners, provides more robust and less biased estimates of price elasticity by effectively controlling for high-dimensional confounders.
+
+```
+--- DML Model Comparison (Learner Robustness) ---
+Learner         | Elasticity | Std Error  | t-stat     | p-val     
+-----------------------------------------------------------------
+lightgbm        | -0.0927    | 0.0004     | -224.4966  | 0.0000    
+xgboost         | -0.0940    | 0.0004     | -225.9129  | 0.0000    
+random_forest   | -0.0988    | 0.0004     | -234.4056  | 0.0000    
+```
+
+**Interpretation and Comparison:**
+
+The DML estimates for price elasticity are significantly different from the OLS estimate, and notably more consistent across the different nuisance learners:
+*   **LightGBM**: -0.0927
+*   **XGBoost**: -0.0940
+*   **XGBRF (Random Forest)**: -0.0988
+
+All DML estimates are negative, indicating that demand is indeed elastic (as expected for most goods), but the magnitude is much smaller than the OLS estimate. This suggests that the naive OLS model likely overestimated the price sensitivity, possibly by attributing the effect of other correlated factors (like promotions or seasonal demand shifts) to price changes.
+
+The consistency of the elasticity estimates across LightGBM, XGBoost, and XGBRF (ranging from -0.0927 to -0.0988) is a strong indicator of the robustness of the causal finding. Despite using different underlying machine learning architectures for the nuisance functions, the final causal parameter remains stable. This stability increases confidence that the DML models have successfully isolated the true causal effect of price on demand, after accounting for complex confounding. The very low standard errors and p-values (0.0000) further confirm the statistical significance of these estimates.
+
+In conclusion, the DML approach provides a more credible and less biased estimate of price elasticity (around -0.09 to -0.10) compared to the naive OLS model (-0.3746), highlighting the importance of advanced causal inference techniques in retail analytics.
 
 ## License
 This project is licensed under the MIT License.
