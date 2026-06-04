@@ -77,22 +77,35 @@ python3 main.py
 
 ## Technical Methodology
 
-The model solves the following system:
-1.  $Y = g_0(X, W) + \theta D + \zeta$
-2.  $D = m_0(X, W) + \nu$
+The pipeline implements the **Partially Linear Regression (PLR)** framework, which decomposes the relationship between price and demand into a linear causal component and a non-linear nuisance component:
 
-Where:
-*   **$Y$ (Outcome)**: `log_quantity` (Log-transformed sales)
-*   **$D$ (Treatment)**: `log_price` (Log-transformed unit price)
-*   **$X$ (Effect Modifiers)**: Fixed effects like `store_id` and `dept_id`.
-*   **$W$ (Controls)**: Confounders including seasonality (`month`), promotional events, and historical demand (`lag_sales`).
-*   **$\theta$**: The coefficient of interest, representing the **Price Elasticity of Demand**.
+1.  $Y = \theta D + g_0(X, W) + \zeta, \quad E[\zeta | D, X, W] = 0$
+2.  $D = m_0(X, W) + \nu, \quad E[\nu | X, W] = 0$
+
+### Methodology Components
+
+*   **Residualization (Robinson's Transformation)**: Instead of regressing $Y$ on $D$ directly, we use LightGBM to estimate the conditional expectations $\hat{l}(X,W) = E[Y|X,W]$ and $\hat{m}(X,W) = E[D|X,W]$. We then compute the residuals: $\tilde{Y} = Y - \hat{l}$ and $\tilde{D} = D - \hat{m}$. The elasticity $\theta$ is estimated by regressing $\tilde{Y}$ on $\tilde{D}$. This "doubly robust" approach ensures that even if one nuisance model is slightly misspecified, the estimate remains consistent.
+*   **Cross-Fitting (DML2)**: To prevent bias from over-fitting the nuisance models to the same data used for elasticity estimation, the repository uses $K$-fold cross-fitting. The nuisance models are trained on $K-1$ folds and used to generate residuals for the $K$-th fold.
+*   **Variable Definitions**:
+    *   **$Y$ (Outcome)**: `log_quantity`.
+    *   **$D$ (Treatment)**: `log_price`.
+    *   **$X, W$ (Confounders)**: High-dimensional controls including seasonality (month), store/dept IDs, and auto-regressive terms (`lag_sales`).
+
+### Why Log-Log?
+In this setup, the coefficient $\theta$ represents the **Constant Elasticity of Demand**:
+
+$$\theta = \frac{\partial \log(Q)}{\partial \log(P)} = \frac{\partial Q / Q}{\partial P / P}$$
+
+This means a 1% increase in price results in a $\theta$% change in quantity sold.
+
+### Identifying Assumptions
+For $\theta$ to have a causal interpretation, the model assumes **Conditional Independence** (Unconfoundedness): all variables that simultaneously affect price and demand (e.g., holidays, past sales momentum) are captured in $W$. By including `lag_sales_1` and `lag_sales_2`, we control for demand shocks that might have influenced pricing decisions.
 
 ## Key Features
 
 *   **Automated Preprocessing**: Handles the "melt" and "merge" operations for complex relational retail data.
-*   **Leakage Prevention**: Uses K-fold cross-fitting via the `doubleml` library to prevent overfitting in the nuisance models.
-*   **Elasticity Interpretation**: Since both price and quantity are log-transformed, the resulting coefficient is directly interpretable as elasticity (a 1% change in price leads to a $\theta$% change in quantity).
+*   **High-Dimensional Control**: Uses LightGBM's gradient boosting to capture non-linearities in $g_0$ and $m_0$ that standard OLS would miss.
+*   **Statistical Rigor**: Provides standard errors and confidence intervals that are valid even when using complex ML learners for the nuisance components.
 
 ## License
 This project is licensed under the MIT License.
