@@ -170,5 +170,41 @@ The consistency of the elasticity estimates across LightGBM, XGBoost, and XGBRF 
 
 In conclusion, the DML approach provides a more credible and less biased estimate of price elasticity (around -0.09 to -0.10) compared to the naive OLS model (-0.3746), highlighting the importance of advanced causal inference techniques in retail analytics.
 
+## Heterogeneity Analysis
+
+### Importance and Thought Process
+While a global elasticity estimate (approx. -0.09) provides a high-level overview of consumer behavior, it assumes that all consumers in all locations respond identically to price changes. In reality, factors like local competition, regional demographics, and store-specific demand patterns create variation. 
+
+Identifying this **Heterogeneity** (Treatment Effect Variation) is critical for:
+- **Localized Pricing**: Adjusting prices at the store level to maximize revenue based on local sensitivity.
+- **Inventory Management**: Predicting demand shifts more accurately for specific regions.
+- **Strategic Resource Allocation**: Focusing promotional budgets on segments that show higher responsiveness.
+
+### Methodology
+To analyze this variation, we execute a segmentation-based DML approach using the `heterogeneity_analysis.py` script. The dataset is partitioned into subsets based on a specific attribute (defined in `config.py` as `HETERO_SEGMENT_COL`, currently `store_id`). For each segment, the pipeline runs an independent `DoubleMLPLR` model using the LightGBM learner to calculate a segment-specific elasticity coefficient ($\theta_{segment}$).
+
+### Results and Interpretation
+The following table summarizes the elasticity across different store segments:
+
+| Segment (Store) | Elasticity | Std Error | p-val |
+| :--- | :--- | :--- | :--- |
+| 7 | -0.1312 | 0.0013 | 0.0 |
+| 8 | -0.1104 | 0.0015 | 0.0 |
+| 9 | -0.1040 | 0.0013 | 0.0 |
+| 0 | -0.0972 | 0.0013 | 0.0 |
+| 3 | -0.0922 | 0.0012 | 0.0 |
+| 1 | -0.0906 | 0.0014 | 0.0 |
+| 2 | -0.0894 | 0.0014 | 0.0 |
+| 4 | -0.0788 | 0.0012 | 0.0 |
+| 5 | -0.0777 | 0.0013 | 0.0 |
+| 6 | -0.0673 | 0.0012 | 0.0 |
+
+**Spread:** Min -0.1312 to Max -0.0673
+
+**Key Findings:**
+- **Significant Variance**: The elasticity ranges from **-0.0673 to -0.1312**. This "spread" confirms that demand in Store 7 is nearly **twice as sensitive** to price changes as demand in Store 6.
+- **Robust Significance**: All segments maintain a p-value of 0.0, indicating that even when the data is sliced into smaller store-level cohorts, the evidence for the estimated elasticity remains overwhelming.
+- **Strategic Insight**: A blanket price increase across all stores would disproportionately impact sales in Store 7. Conversely, Store 6 could likely tolerate higher price increases with minimal impact on volume compared to the global average. This granular view allows for a "surgical" approach to revenue management.
+
 ## License
 This project is licensed under the MIT License.
