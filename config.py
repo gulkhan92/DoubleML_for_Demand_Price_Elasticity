@@ -30,6 +30,11 @@ W_COLS = [
     'event_name_1', 'event_type_1', 'lag_sales_1', 'lag_sales_2'
 ]
 
+# IV / Hausman Parameters
+# Instruments: SNAP cycles (External shocks to pricing power)
+IV_COLS = ['snap_CA', 'snap_TX', 'snap_WI']
+EXCL_W_COLS = [c for c in W_COLS if c not in IV_COLS]
+
 # Analysis Parameters
 STABILITY_SAMPLES = 5          # Number of sub-sampling iterations
 SUB_SAMPLE_SIZE = 1_000_000    # Size of each sub-sample
