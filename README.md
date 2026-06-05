@@ -170,6 +170,41 @@ The consistency of the elasticity estimates across LightGBM, XGBoost, and XGBRF 
 
 In conclusion, the DML approach provides a more credible and less biased estimate of price elasticity (around -0.09 to -0.10) compared to the naive OLS model (-0.3746), highlighting the importance of advanced causal inference techniques in retail analytics.
 
+## Standard Error Stability Analysis
+
+### Importance and Thought Process
+When working with massive datasets (over 11 million rows), statistical significance is easily achieved ($p$-values often hit zero). However, statistical significance does not always guarantee **robustness**. A key question is whether the estimated elasticity is stable across different subsets of the data or if it is being driven by specific outliers or temporal anomalies.
+
+Standard Error Stability Analysis is required to:
+- **Validate Reliability**: Ensure that the -0.09 estimate is a consistent property of the data, not a "lucky" result of the full sample.
+- **Assess Variance**: Determine how much the coefficient "swings" when the sample changes.
+- **Build Confidence**: Provide stakeholders with evidence that the pricing strategy is based on a stable consumer behavior pattern.
+
+### Methodology
+The stability is assessed using the `stability_analysis.py` script, which performs a sub-sampling routine:
+1. **Random Sampling**: The script extracts 5 independent random sub-samples of 1,000,000 rows each from the master dataset.
+2. **DML Execution**: For each sub-sample, a full Double Machine Learning (DML) pipeline is executed using the LightGBM nuisance learner.
+3. **Statistical Aggregation**: We track the movement of the elasticity coefficient ($\theta$) and its standard error (SE) across iterations to calculate the mean, standard deviation, and maximum deviation.
+
+### Results and Discussion
+The analysis yielded the following results across 5 iterations:
+
+| Iteration | Elasticity ($\theta$) | Std Error |
+| :--- | :--- | :--- |
+| 1 | -0.0909 | 0.0014 |
+| 2 | -0.0945 | 0.0014 |
+| 3 | -0.0927 | 0.0014 |
+| 4 | -0.0938 | 0.0014 |
+| 5 | -0.0947 | 0.0014 |
+
+**Summary Statistics:**
+- **Mean Coefficient**: -0.0933
+- **Coefficient Std Dev**: 0.0014
+- **Max Deviation**: 0.0038
+
+**Interpretation:**
+The analysis reveals **High Stability**. The coefficient standard deviation (0.0014) is extremely small relative to the mean (-0.0933), and the maximum deviation across iterations is less than 0.004. This confirms that the estimated price elasticity is remarkably robust to data sampling. Whether we look at the full 11 million rows or a random subset of 1 million, the consumer sensitivity remains anchored around the -0.09 mark, providing high confidence for pricing interventions.
+
 ## Heterogeneity Analysis
 
 ### Importance and Thought Process
