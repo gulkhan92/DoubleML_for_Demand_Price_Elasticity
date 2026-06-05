@@ -30,6 +30,11 @@ W_COLS = [
     'event_name_1', 'event_type_1', 'lag_sales_1', 'lag_sales_2'
 ]
 
+# Analysis Parameters
+STABILITY_SAMPLES = 5          # Number of sub-sampling iterations
+SUB_SAMPLE_SIZE = 1_000_000    # Size of each sub-sample
+HETERO_SEGMENT_COL = "store_id" # Column to analyze for heterogeneity
+
 # ML Params
 LGBM_PARAMS = {
     "n_estimators": 500,

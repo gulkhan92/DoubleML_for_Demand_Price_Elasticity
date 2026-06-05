@@ -153,6 +153,19 @@ The DML estimates for price elasticity are significantly different from the OLS 
 
 All DML estimates are negative, indicating that demand is indeed elastic (as expected for most goods), but the magnitude is much smaller than the OLS estimate. This suggests that the naive OLS model likely overestimated the price sensitivity, possibly by attributing the effect of other correlated factors (like promotions or seasonal demand shifts) to price changes.
 
+### Practical Interpretation of Effect Size
+
+The DML models converged on a price elasticity of approximately **-0.09**. In practical business terms, this means:
+*   **Inelastic Demand**: A 10% increase in price is associated with only a **0.9% decrease** in quantity sold. 
+*   **Pricing Power**: For the "FOODS" category, the consumer demand is relatively unresponsive to price changes. This suggests that the brand or category holds significant pricing power; price increases are likely to lead to an overall increase in total revenue because the margin gain per unit significantly outweighs the minor volume loss.
+*   **Strategic Action**: Marketing efforts should likely focus more on volume-driving activities (cross-selling, availability) rather than deep discounting, as the volume "lift" from a 10% discount would only be 0.9%, likely failing to cover the cost of the promotion.
+
+### Robustness & Advanced Analysis
+
+To move beyond the global average and ensure statistical reliability, this repository includes specialized scripts:
+1.  **Standard Error Stability**: Run `python3 stability_analysis.py` to verify if the -0.09 estimate remains stable across different data sub-samples (reducing concerns about high variance).
+2.  **Heterogeneity Analysis**: Run `python3 heterogeneity_analysis.py` to decompose the global elasticity. This explores whether specific segments (e.g., certain stores or departments) are more or less price-sensitive than the -0.09 average.
+
 The consistency of the elasticity estimates across LightGBM, XGBoost, and XGBRF (ranging from -0.0927 to -0.0988) is a strong indicator of the robustness of the causal finding. Despite using different underlying machine learning architectures for the nuisance functions, the final causal parameter remains stable. This stability increases confidence that the DML models have successfully isolated the true causal effect of price on demand, after accounting for complex confounding. The very low standard errors and p-values (0.0000) further confirm the statistical significance of these estimates.
 
 In conclusion, the DML approach provides a more credible and less biased estimate of price elasticity (around -0.09 to -0.10) compared to the naive OLS model (-0.3746), highlighting the importance of advanced causal inference techniques in retail analytics.
