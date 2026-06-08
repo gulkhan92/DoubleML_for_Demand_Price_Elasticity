@@ -241,5 +241,53 @@ The following table summarizes the elasticity across different store segments:
 - **Robust Significance**: All segments maintain a p-value of 0.0, indicating that even when the data is sliced into smaller store-level cohorts, the evidence for the estimated elasticity remains overwhelming.
 - **Strategic Insight**: A blanket price increase across all stores would disproportionately impact sales in Store 7. Conversely, Store 6 could likely tolerate higher price increases with minimal impact on volume compared to the global average. This granular view allows for a "surgical" approach to revenue management.
 
+## Hausman Endogeneity Test
+
+### Why It Is Needed
+In demand modeling, price is rarely "random." Retailers often set prices based on expected demand (e.g., raising prices when they know a holiday is coming). This creates **Endogeneity**: the price ($D$) is correlated with the unobserved error term ($\zeta$) in the demand equation. If endogeneity exists, standard OLS is biased. The Hausman test is a statistical hurdle used to prove that OLS is inconsistent and that a more complex causal method (like DML or IV) is required.
+
+### Technical Methodology & Math
+The project implements the **Durbin-Wu-Hausman (DWH)** test, which is a regression-based version of the classical Hausman test. 
+
+1. **The Logic**: We decompose the treatment (Price) into two parts: one explained by exogenous instruments ($Z$) and a residual part that might contain the "endogenous" noise.
+2. **Step 1 (First Stage)**: Regress Price on instruments ($Z$) and controls ($W$):
+   $$D = Z\gamma + W\delta + \nu$$
+3. **Step 2 (Residual Extraction)**: Calculate the residuals $\hat{\nu}$ (the part of pricing that instruments couldn't explain).
+4. **Step 3 (Augmented Regression)**: Run the OLS demand model but include $\hat{\nu}$ as a regressor:
+   $$Y = \beta_0 + \theta D + W\phi + \gamma \hat{\nu} + \epsilon$$
+5. **The Test**: We test the null hypothesis $H_0: \gamma = 0$. If the p-value is low, we reject the null, meaning the price residuals are correlated with the outcome. This is a formal proof of endogeneity.
+
+### OLS vs. 2SLS (Two-Stage Least Squares)
+To perform this test, we compare OLS against **2SLS**, the standard estimator for Instrumental Variables (IV):
+* **First Stage**: Use instruments (SNAP cycles) to predict Price. This "cleans" the price of endogeneity.
+* **Second Stage**: Use the *predicted* Price to estimate sales. 
+* **Goal**: If the instrument is "strong" and "exogenous," 2SLS should provide the true causal effect.
+
+### Discussion of Hausman Results
+
+Running `hausman_test.py` yielded the following results:
+
+| Estimator | Elasticity ($\theta$) |
+| :--- | :--- |
+| **Naive OLS** | -0.1079 |
+| **2SLS (IV)** | **+0.4969** |
+| **Hausman p-value** | **0.0000** |
+
+#### 1. Statistical Verdict
+The p-value of **0.0000** means we **strongly reject the null hypothesis**. This statistically confirms that Price is endogenous and that the Naive OLS result is biased. It justifies why the Double ML approach was necessary for this project.
+
+#### 2. The 2SLS "Failure" and Instrument Validity
+While the test successfully detected endogeneity, the **2SLS coefficient of +0.4969 is economically nonsensical**. It implies that increasing prices causes an *increase* in sales (upward-sloping demand). This indicates a failure of the Instrumental Variable approach in this specific dataset:
+
+* **Weak Instrument Problem**: For an instrument to work, it must strongly move the price. While SNAP cycles (`snap_CA`, etc.) affect pricing power, they might not provide enough variation in the actual unit prices to overcome the noise in the 11-million-row dataset. When instruments are weak, the 2SLS estimator becomes highly unstable and often "flips" signs.
+* **Exclusion Restriction Violation**: An instrument must *only* affect sales through price. However, SNAP benefit disbursements are massive liquidity shocks to low-income households. It is highly likely that SNAP affects sales **directly** (people have more money to spend) rather than just through Walmart's pricing response. This correlation with the error term violates the "Exclusion Restriction," making the 2SLS result invalid.
+
+#### 3. Why Double ML is Superior Here
+The divergence between the nonsensical 2SLS result (+0.49) and the robust DML result (~ -0.09) highlights the power of the **Double Machine Learning** approach:
+
+1. **No "Magic Bullet" Required**: IV/2SLS requires finding a perfect exogenous instrument (the "magic bullet"), which is extremely difficult in retail data. 
+2. **High-Dimensional Control**: DML doesn't look for an external lever. Instead, it uses the massive set of controls ($W$)—including lags, seasonality, and event types—to "partial out" the confounding noise using flexible ML models (LightGBM/XGBoost).
+3. **Consensus**: Because DML provides a plausible negative elasticity that is stable across different ML learners, it is the more credible causal estimator for this project.
+
 ## License
 This project is licensed under the MIT License.
