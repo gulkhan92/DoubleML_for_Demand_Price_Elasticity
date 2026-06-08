@@ -13,8 +13,8 @@ graph TD
     C --> D{"Analysis Pipeline"}
     D --> E["Naive Baseline: Standard OLS"]
     D --> F["Double ML Framework"]
-    F --> G["Nuisance Model 1: E[Outcome | Controls] via LightGBM"]
-    F --> H["Nuisance Model 2: E[Treatment | Controls] via LightGBM"]
+    F --> G["Nuisance Model 1: E[Outcome (log_quantity) | Controls] via LightGBM"]
+    F --> H["Nuisance Model 2: E[Treatment (log_price) | Controls] via LightGBM"]
     G --> I["Residualization & Cross-Fitting"]
     H --> I
     I --> J["Causal Elasticity Estimation"]
@@ -35,7 +35,7 @@ Traditional OLS serves as our naive baseline. While computationally efficient an
 This project uses **Double Machine Learning** to overcome the limitations of OLS. The core innovation is the use of various high-performance ML models to handle the "nuisance" part of the estimation.
 
 1.  **Flexibility**: High-capacity learners like **LightGBM**, **XGBoost**, and **XGBRF** (XGBoost's Random Forest implementation) are chosen for their ability to capture complex, non-linear interactions and dependencies between features (e.g., how the impact of a SNAP event changes depending on the month) that standard linear models often miss.
-2.  **Orthogonalization**: By using ML to predict both the quantity ($Y$) and the price ($T$) based on the controls, and then regressing the residuals, DML "partials out" the influence of confounders. This ensures that the final elasticity estimate is derived only from the variation in price that is *not* explained by other factors.
+2.  **Orthogonalization**: By using machine learning to predict both the outcome ($Y$: `log_quantity`) and the treatment ($D$: `log_price`) based on the controls, and subsequently regressing the residuals, DML "partials out" the influence of confounders. This ensures that the final elasticity estimate is derived exclusively from the variation in price that is *not* explained by other factors.
 3.  **Cross-Fitting**: DML employs K-fold cross-fitting to remove bias introduced by overfitting the ML models, a common pitfall when using flexible learners for causal inference.
 
 ### Choice of Nuisance Learners
@@ -244,23 +244,23 @@ The following table summarizes the elasticity across different store segments:
 ## Hausman Endogeneity Test
 
 ### Why It Is Needed
-In demand modeling, price is rarely "random." Retailers often set prices based on expected demand (e.g., raising prices when they know a holiday is coming). This creates **Endogeneity**: the price ($D$) is correlated with the unobserved error term ($\zeta$) in the demand equation. If endogeneity exists, standard OLS is biased. The Hausman test is a statistical hurdle used to prove that OLS is inconsistent and that a more complex causal method (like DML or IV) is required.
+In demand modeling, price is rarely exogenous. Retailers often set prices based on anticipated demand (e.g., increasing prices during peak holiday periods). This creates **Endogeneity**: the treatment ($D$: `log_price`) is correlated with the unobserved error term ($\zeta$) in the demand equation. If endogeneity is present, standard OLS is biased. The Hausman test serves as a statistical diagnostic to determine if OLS is inconsistent, justifying the requirement for more advanced causal methods such as DML or Instrumental Variables (IV).
 
 ### Technical Methodology & Math
 The project implements the **Durbin-Wu-Hausman (DWH)** test, which is a regression-based version of the classical Hausman test. 
 
-1. **The Logic**: We decompose the treatment (Price) into two parts: one explained by exogenous instruments ($Z$) and a residual part that might contain the "endogenous" noise.
-2. **Step 1 (First Stage)**: Regress Price on instruments ($Z$) and controls ($W$):
+1. **The Logic**: We decompose the treatment ($D$: `log_price`) into two components: one explained by exogenous instruments ($Z$: SNAP cycles) and a residual component that potentially captures endogenous variation.
+2. **Step 1 (First Stage)**: Regress the treatment ($D$: `log_price`) on instruments ($Z$: SNAP cycles) and controls ($W$: seasonality, lags, etc.):
    $$D = Z\gamma + W\delta + \nu$$
-3. **Step 2 (Residual Extraction)**: Calculate the residuals $\hat{\nu}$ (the part of pricing that instruments couldn't explain).
-4. **Step 3 (Augmented Regression)**: Run the OLS demand model but include $\hat{\nu}$ as a regressor:
+3. **Step 2 (Residual Extraction)**: Calculate the residuals $\hat{\nu}$, representing the portion of price variation not explained by the instruments.
+4. **Step 3 (Augmented Regression)**: Re-estimate the OLS demand model for the outcome ($Y$: `log_quantity`), including $\hat{\nu}$ as an additional regressor:
    $$Y = \beta_0 + \theta D + W\phi + \gamma \hat{\nu} + \epsilon$$
-5. **The Test**: We test the null hypothesis $H_0: \gamma = 0$. If the p-value is low, we reject the null, meaning the price residuals are correlated with the outcome. This is a formal proof of endogeneity.
+5. **The Test**: We test the null hypothesis $H_0: \gamma = 0$. A statistically significant p-value leads to the rejection of the null, indicating that the price residuals are correlated with the outcome, which formally confirms the presence of endogeneity.
 
 ### OLS vs. 2SLS (Two-Stage Least Squares)
 To perform this test, we compare OLS against **2SLS**, the standard estimator for Instrumental Variables (IV):
-* **First Stage**: Use instruments (SNAP cycles) to predict Price. This "cleans" the price of endogeneity.
-* **Second Stage**: Use the *predicted* Price to estimate sales. 
+* **First Stage**: Utilize instruments ($Z$: SNAP cycles) to predict the treatment ($D$: `log_price`). This process isolates the exogenous variation in price.
+* **Second Stage**: Regress the outcome ($Y$: `log_quantity`) on the *predicted* price from the first stage.
 * **Goal**: If the instrument is "strong" and "exogenous," 2SLS should provide the true causal effect.
 
 ### Discussion of Hausman Results
@@ -277,15 +277,15 @@ Running `hausman_test.py` yielded the following results:
 The p-value of **0.0000** means we **strongly reject the null hypothesis**. This statistically confirms that Price is endogenous and that the Naive OLS result is biased. It justifies why the Double ML approach was necessary for this project.
 
 #### 2. The 2SLS "Failure" and Instrument Validity
-While the test successfully detected endogeneity, the **2SLS coefficient of +0.4969 is economically nonsensical**. It implies that increasing prices causes an *increase* in sales (upward-sloping demand). This indicates a failure of the Instrumental Variable approach in this specific dataset:
+While the test successfully detected endogeneity, the **2SLS coefficient of +0.4969 is economically implausible**, as it suggests a positive correlation between price and demand, violating the fundamental law of demand. This indicates a failure of the Instrumental Variable approach for this specific application:
 
-* **Weak Instrument Problem**: For an instrument to work, it must strongly move the price. While SNAP cycles (`snap_CA`, etc.) affect pricing power, they might not provide enough variation in the actual unit prices to overcome the noise in the 11-million-row dataset. When instruments are weak, the 2SLS estimator becomes highly unstable and often "flips" signs.
-* **Exclusion Restriction Violation**: An instrument must *only* affect sales through price. However, SNAP benefit disbursements are massive liquidity shocks to low-income households. It is highly likely that SNAP affects sales **directly** (people have more money to spend) rather than just through Walmart's pricing response. This correlation with the error term violates the "Exclusion Restriction," making the 2SLS result invalid.
+* **Weak Instrument Problem**: A valid instrument must demonstrate a strong correlation with the treatment. While SNAP cycles influence pricing strategies, they may not provide sufficient exogenous variation in `log_price` to overcome the inherent noise in a high-dimensional dataset of 11 million observations. Weak instruments can lead to highly unstable 2SLS estimators.
+* **Exclusion Restriction Violation**: The exclusion restriction requires that the instrument affects the outcome ($Y$: `log_quantity`) *only* through the treatment ($D$: `log_price`). However, SNAP benefit disbursements represent significant liquidity shocks to households, likely affecting demand **directly**. This correlation with the structural error term violates the exclusion restriction, rendering the 2SLS estimates invalid.
 
 #### 3. Why Double ML is Superior Here
-The divergence between the nonsensical 2SLS result (+0.49) and the robust DML result (~ -0.09) highlights the power of the **Double Machine Learning** approach:
+The divergence between the implausible 2SLS result (+0.49) and the robust DML result (~ -0.09) underscores the advantages of the **Double Machine Learning** framework:
 
-1. **No "Magic Bullet" Required**: IV/2SLS requires finding a perfect exogenous instrument (the "magic bullet"), which is extremely difficult in retail data. 
+1. **Avoidance of Instrumental Dependency**: IV/2SLS relies on identifying a strictly exogenous instrument, which is exceptionally challenging in complex retail environments.
 2. **High-Dimensional Control**: DML doesn't look for an external lever. Instead, it uses the massive set of controls ($W$)—including lags, seasonality, and event types—to "partial out" the confounding noise using flexible ML models (LightGBM/XGBoost).
 3. **Consensus**: Because DML provides a plausible negative elasticity that is stable across different ML learners, it is the more credible causal estimator for this project.
 
