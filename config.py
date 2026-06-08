@@ -40,6 +40,12 @@ STABILITY_SAMPLES = 5          # Number of sub-sampling iterations
 SUB_SAMPLE_SIZE = 1_000_000    # Size of each sub-sample
 HETERO_SEGMENT_COL = "store_id" # Column to analyze for heterogeneity
 
+# Oster Bounds Parameters
+OSTER_DELTA_R2_THRESHOLD = 0.05 # Threshold for R^2 change to indicate strong unobserved confounding
+
+# Falsification Test Parameters
+PLACEBO_SHUFFLE_COL = "log_price" # Column to shuffle for placebo test
+
 # ML Params
 LGBM_PARAMS = {
     "n_estimators": 500,

@@ -250,10 +250,10 @@ In demand modeling, price is rarely exogenous. Retailers often set prices based 
 The project implements the **Durbin-Wu-Hausman (DWH)** test, which is a regression-based version of the classical Hausman test. 
 
 1. **The Logic**: We decompose the treatment ($D$: `log_price`) into two components: one explained by exogenous instruments ($Z$: SNAP cycles) and a residual component that potentially captures endogenous variation.
-2. **Step 1 (First Stage)**: Regress the treatment ($D$: `log_price`) on instruments ($Z$: SNAP cycles) and controls ($W$: seasonality, lags, etc.):
+2. **Step 1 (First Stage)**: Regress the treatment ($D$: `log_price`) on instruments ($Z$: `snap_CA`, `snap_TX`, `snap_WI`) and controls ($W$: `month`, `year`, `event_name_1`, `event_type_1`, `lag_sales_1`, `lag_sales_2`, `dept_id`, `store_id`, `state_id`):
    $$D = Z\gamma + W\delta + \nu$$
 3. **Step 2 (Residual Extraction)**: Calculate the residuals $\hat{\nu}$, representing the portion of price variation not explained by the instruments.
-4. **Step 3 (Augmented Regression)**: Re-estimate the OLS demand model for the outcome ($Y$: `log_quantity`), including $\hat{\nu}$ as an additional regressor:
+4. **Step 3 (Augmented Regression)**: Re-estimate the OLS demand model for the outcome ($Y$: `log_quantity`), including the treatment ($D$: `log_price`), controls ($W$), and $\hat{\nu}$ as an additional regressor:
    $$Y = \beta_0 + \theta D + W\phi + \gamma \hat{\nu} + \epsilon$$
 5. **The Test**: We test the null hypothesis $H_0: \gamma = 0$. A statistically significant p-value leads to the rejection of the null, indicating that the price residuals are correlated with the outcome, which formally confirms the presence of endogeneity.
 
@@ -261,7 +261,7 @@ The project implements the **Durbin-Wu-Hausman (DWH)** test, which is a regressi
 To perform this test, we compare OLS against **2SLS**, the standard estimator for Instrumental Variables (IV):
 * **First Stage**: Utilize instruments ($Z$: SNAP cycles) to predict the treatment ($D$: `log_price`). This process isolates the exogenous variation in price.
 * **Second Stage**: Regress the outcome ($Y$: `log_quantity`) on the *predicted* price from the first stage.
-* **Goal**: If the instrument is "strong" and "exogenous," 2SLS should provide the true causal effect.
+* **Goal**: If the instrument is sufficiently "strong" (highly correlated with the treatment) and "exogenous" (uncorrelated with the outcome's error term), 2SLS should provide a consistent estimate of the true causal effect.
 
 ### Discussion of Hausman Results
 
@@ -279,15 +279,68 @@ The p-value of **0.0000** means we **strongly reject the null hypothesis**. This
 #### 2. The 2SLS "Failure" and Instrument Validity
 While the test successfully detected endogeneity, the **2SLS coefficient of +0.4969 is economically implausible**, as it suggests a positive correlation between price and demand, violating the fundamental law of demand. This indicates a failure of the Instrumental Variable approach for this specific application:
 
-* **Weak Instrument Problem**: A valid instrument must demonstrate a strong correlation with the treatment. While SNAP cycles influence pricing strategies, they may not provide sufficient exogenous variation in `log_price` to overcome the inherent noise in a high-dimensional dataset of 11 million observations. Weak instruments can lead to highly unstable 2SLS estimators.
-* **Exclusion Restriction Violation**: The exclusion restriction requires that the instrument affects the outcome ($Y$: `log_quantity`) *only* through the treatment ($D$: `log_price`). However, SNAP benefit disbursements represent significant liquidity shocks to households, likely affecting demand **directly**. This correlation with the structural error term violates the exclusion restriction, rendering the 2SLS estimates invalid.
+* **Weak Instrument Problem**: A valid instrument must demonstrate a strong correlation with the treatment ($D$: `log_price`). While SNAP cycles influence pricing strategies, they may not provide sufficient exogenous variation in `log_price` to overcome the inherent noise in a high-dimensional dataset of 11 million observations. Weak instruments can lead to highly unstable 2SLS estimators.
+* **Exclusion Restriction Violation**: The exclusion restriction requires that the instrument ($Z$: SNAP cycles) affects the outcome ($Y$: `log_quantity`) *only* through the treatment ($D$: `log_price`). However, SNAP benefit disbursements represent significant liquidity shocks to households, likely affecting demand **directly** (e.g., increased purchasing power). This direct effect, bypassing `log_price`, correlates with the structural error term and violates the exclusion restriction, rendering the 2SLS estimates invalid.
 
 #### 3. Why Double ML is Superior Here
-The divergence between the implausible 2SLS result (+0.49) and the robust DML result (~ -0.09) underscores the advantages of the **Double Machine Learning** framework:
+The divergence between the implausible 2SLS result (+0.49) and the robust DML result (~ -0.09) highlights the strengths of the **Double Machine Learning** framework:
 
-1. **Avoidance of Instrumental Dependency**: IV/2SLS relies on identifying a strictly exogenous instrument, which is exceptionally challenging in complex retail environments.
-2. **High-Dimensional Control**: DML doesn't look for an external lever. Instead, it uses the massive set of controls ($W$)—including lags, seasonality, and event types—to "partial out" the confounding noise using flexible ML models (LightGBM/XGBoost).
+1. **Avoidance of Instrumental Dependency**: Unlike IV/2SLS, DML does not rely on an external instrumental variable. Identifying a strictly exogenous instrument is exceptionally challenging in complex retail environments.
+2. **High-Dimensional Control**: DML effectively utilizes the comprehensive set of controls ($W$)—including lags, seasonality, and event types—to "partial out" the confounding noise using flexible ML models (LightGBM/XGBoost).
 3. **Consensus**: Because DML provides a plausible negative elasticity that is stable across different ML learners, it is the more credible causal estimator for this project.
+
+## Robustness Analysis (Oster Bounds Logic)
+
+### Why It Is Needed
+A primary challenge in causal inference is "Selection on Unobservables." Even after controlling for a wide array of variables ($W$), there is always a risk that an omitted variable (something we didn't measure) is correlated with both price and quantity, biasing our results. 
+
+The Robustness Analysis helps us understand how "strong" our observed controls are and, by extension, how much an unobserved variable would have to impact the model to nullify our findings. It provides a way to move beyond simple point estimates to a discussion of how stable the causal effect is.
+
+### Technical Methodology & Math
+This analysis relies on the logic proposed by **Oster (2019)**, which examines the stability of the treatment coefficient relative to the movement in the R-squared. We compare two models:
+
+1. **Short Regression (Baseline)**: A naive model regressing the outcome on the treatment only.
+   $$Y = \alpha + \beta_{short} D + \epsilon$$
+2. **Long Regression (Controlled)**: A model including all observed confounders ($W$).
+   $$Y = \alpha + \beta_{long} D + \Gamma W + \eta$$
+
+**The Logic**: If adding controls ($W$) explains a significant portion of the variance in the outcome (large increase in $R^2$) and simultaneously moves the coefficient ($\beta$) toward a specific value (like our DML estimate), we gain confidence that the observed controls are capturing the bulk of the bias. 
+
+Oster’s framework suggests that if the "selection on observables" is proportional to the "selection on unobservables," we can bound the true effect. If the $R^2$ moves significantly while the coefficient stabilizes, the unobserved factors would need to be unrealistically influential to change the conclusion.
+
+### Discussion of Robustness Results
+
+Running `robustness_analysis.py` yielded the following results:
+
+| Metric | Short OLS (Naive) | Long OLS (Controlled) |
+| :--- | :--- | :--- |
+| **Elasticity Coefficient ($\theta$)** | -0.3746 | -0.1085 |
+| **R-squared ($R^2$)** | 0.0515 | 0.4196 |
+
+**Summary Statistics:**
+- **Coefficient Change**: -0.3746 $\rightarrow$ -0.1085 (71.03% reduction in magnitude)
+- **$R^2$ Increase**: 0.0515 $\rightarrow$ 0.4196 (an increase of 0.3681)
+
+#### Interpretation:
+1. **Identification of Bias**: The movement from the Short OLS (-0.37) to the Long OLS (-0.11) demonstrates that the naive model was heavily biased by "selection on observables." The naive model was incorrectly attributing demand spikes to price drops when, in reality, those spikes were driven by seasonal or promotional confounders captured in our controls.
+
+2. **Control Strength**: The $R^2$ jumped from roughly 5% to 42%. This is a substantial increase, indicating that our chosen control set ($W$: lags, seasonality, SNAP events) is highly predictive of sales volume. 
+
+3. **Convergence Toward DML**: The Long OLS estimate (-0.1085) is significantly closer to our Double ML estimates (avg. -0.093) than the Short OLS. This convergence suggests that the linear controls are doing the "heavy lifting" of bias reduction, while the DML's non-linear nuisance models are further refining the estimate by capturing complex interactions that OLS misses.
+
+4. **Stability Verdict**: Because the controls explain a large amount of new variance ($\Delta R^2 \approx 0.37$) and lead to a stable, economically plausible coefficient, the results are considered robust. An unobserved confounder would need to be exceptionally more powerful than our combined set of observed features to explain away the remaining effect.
+
+## Falsification Tests (Placebo & Wrong Outcome)
+
+### Importance and Thought Process
+Falsification tests act as a "sanity check" for the causal pipeline. If our model is truly capturing a causal link between price and quantity, it should fail to find an effect when that link is intentionally broken or applied to an unrelated outcome. 
+
+### Methodology
+The `falsification_tests.py` script implements two tests:
+1. **Placebo Treatment**: We randomly shuffle `log_price` across the dataset. This maintains the distribution of prices but destroys the specific timing/contextual link between a price change and a sales change.
+2. **Wrong Outcome**: We replace `log_quantity` with random noise. 
+
+**Goal**: In both cases, the estimated elasticity should be statistically indistinguishable from zero. If the model finds an "effect" on random noise, it suggests the pipeline is over-fitting or picking up spurious correlations.
 
 ## License
 This project is licensed under the MIT License.
