@@ -35,10 +35,10 @@ def run_eda():
     print(df[[config.Y_COL, config.T_COL, 'sales', 'sell_price']].describe())
 
     # Distribution of Unit Sales
-    plt.figure(figsize=(10, 5))
-    sns.histplot(df['sales'], bins=100, kde=False)
-    plt.title('Distribution of Sales Volume')
-    plt.yscale('log') # Log scale for better visibility of long tail
+    plt.figure(figsize=(12, 6))
+    sns.histplot(df['sales'], bins=50, kde=True, log_scale=True)
+    plt.title('Distribution of Sales Volume (Log Scale)')
+    plt.xlabel('Sales')
     plt.savefig(os.path.join(plot_dir, 'sales_distribution.png'))
     plt.close()
 
@@ -54,7 +54,7 @@ def run_eda():
     plt.close()
 
     # --- [Project Specific EDA: Demand Price Elasticity] ---
-    print("\n[Project Specific EDA] Price vs Quantity Analysis:")
+    print("\n[Project Specific EDA] Causal Diagnostics: Elasticity and Confounding:")
 
     # Scatter plot with regression line (Log-Log)
     # Sampling for efficient plotting of large dataset
@@ -68,17 +68,50 @@ def run_eda():
     plt.savefig(os.path.join(plot_dir, 'price_quantity_correlation.png'))
     plt.close()
 
+    # Price Volatility (Coefficient of Variation)
+    print("\nPrice Volatility (Coefficient of Variation) per Item-Store:")
+    price_cv = df.groupby(['item_id', 'store_id'])['sell_price'].apply(lambda x: np.std(x) / np.mean(x) if np.mean(x) > 0 else 0)
+    print(f"Mean Price CV: {price_cv.mean():.4f}")
+    print(f"Median Price CV: {price_cv.median():.4f}")
+    print(f"Items with zero price variation: {(price_cv == 0).sum()} out of {len(price_cv)}")
+
+    plt.figure(figsize=(10, 6))
+    sns.histplot(price_cv[price_cv > 0], bins=50, kde=True)
+    plt.title('Distribution of Price Coefficient of Variation (CV)')
+    plt.xlabel('Price CV')
+    plt.savefig(os.path.join(plot_dir, 'price_cv_distribution.png'))
+    plt.close()
+
+    # Log-Price vs Lagged Sales (Endogeneity Check)
+    # Sample for performance
+    sample_df_lag = df.sample(n=min(100000, len(df)), random_state=43)
+    plt.figure(figsize=(10, 6))
+    sns.regplot(data=sample_df_lag, x='lag_sales_1', y=config.T_COL, 
+                scatter_kws={'alpha': 0.1, 's': 1}, line_kws={'color': 'red'})
+    plt.title('Log-Price vs Lagged Sales (Potential Endogeneity)')
+    plt.xlabel('Lagged Log(Quantity + 1)')
+    plt.ylabel('Log(Price)')
+    plt.savefig(os.path.join(plot_dir, 'price_lag_sales_correlation.png'))
+    plt.close()
+
     # Correlation Heatmap for Confounders
     plt.figure(figsize=(12, 10))
     # Select subset of columns for heatmap
-    cols_for_heatmap = [config.Y_COL, config.T_COL] + config.W_COLS
+    cols_for_heatmap = [config.Y_COL, config.T_COL, 'month', 'snap_CA', 'snap_TX', 'snap_WI', 'lag_sales_1', 'lag_sales_2']
     # Filter only numeric/encoded columns
     available_cols = [c for c in cols_for_heatmap if c in df.columns]
     corr = df[available_cols].corr()
     sns.heatmap(corr, annot=True, fmt=".2f", cmap='coolwarm', cbar=True)
     plt.title('Correlation Heatmap (Treatment, Outcome, and Confounders)')
     plt.tight_layout()
-    plt.savefig(os.path.join(plot_dir, 'feature_correlation_heatmap.png'))
+    plt.savefig(os.path.join(plot_dir, 'correlation_heatmap.png'))
+    plt.close()
+
+    # Distribution of Log-Quantity by Department (Hint for Heterogeneity)
+    plt.figure(figsize=(12, 6))
+    sns.boxplot(data=df.sample(n=min(200000, len(df)), random_state=44), x='dept_id', y=config.Y_COL)
+    plt.title('Distribution of Log-Quantity by Department')
+    plt.savefig(os.path.join(plot_dir, 'log_quantity_by_department.png'))
     plt.close()
 
     print(f"\nEDA Complete. Visuals saved to '{plot_dir}/' directory.")

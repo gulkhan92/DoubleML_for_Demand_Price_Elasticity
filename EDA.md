@@ -1,19 +1,14 @@
-# Exploratory Data Analysis (EDA)
+# Demand-Price Dynamics: Exploratory Data Analysis
 
-Exploratory Data Analysis (EDA) is a critical initial step in any data science project, especially in causal inference. For this project, EDA serves multiple purposes:
-
-*   **Data Understanding**: To grasp the structure, types, and quality of the raw and engineered data.
-*   **Problem Framing**: To identify initial patterns, distributions, and potential issues (e.g., missing values, outliers) that might influence the causal model.
-*   **Confounder Identification**: To visually and statistically assess relationships between the treatment (`log_price`), outcome (`log_quantity`), and potential confounders, thereby justifying the need for advanced causal methods like Double Machine Learning.
-*   **Treatment Variation**: To ensure sufficient variation in the treatment variable (price) exists to reliably estimate elasticity.
+This analysis characterizes the high-dimensional feature space of the M5 Walmart dataset to validate the assumptions required for Causal Inference. The primary objective is to isolate the relationship between price shifts and quantity demanded while identifying the confounding variables that the Double Machine Learning (DML) framework must "partial out."
 
 ---
+## 1. Objective of Analysis
+1. **Characterize Signal Strength**: Evaluate the frequency and magnitude of price changes (Treatment Variation).
+2. **Diagnose Endogeneity**: Identify correlations between price and historical demand (Lagged Sales).
+3. **Identify Confounding Factors**: Map the influence of external shocks (SNAP events, holidays) on sales volume.
 
-## 1. Basic Data Science & ML EDA
-
-This section focuses on general data characteristics relevant to any data science or machine learning task.
-
-### Data Overview
+## 2. Statistical Data Characteristics
 
 The dataset, after initial loading and feature engineering, has the following structure:
 
@@ -46,14 +41,7 @@ dtypes: float64(5), int64(7), int8(5), str(2)
 memory usage: 1.3 GB
 ```
 
-**Observations:**
-*   **Scale**: The dataset is massive, with over 11 million entries, indicating high statistical power but also demanding efficient processing.
-*   **Data Types**: Categorical features like `store_id`, `dept_id`, `state_id`, `event_name_1`, and `event_type_1` have been successfully encoded into `int8` using `cat.codes`, which is memory-efficient and suitable for tree-based ML models.
-*   **Memory**: The DataFrame consumes approximately 1.3 GB of memory.
-
-### Descriptive Statistics
-
-Summary statistics for key numerical columns:
+### Descriptive Statistics and Sample Volume
 
 ```
        log_quantity     log_price         sales    sell_price
