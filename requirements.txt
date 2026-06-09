@@ -6,3 +6,5 @@ xgboost # For XGBoost nuisance models
 statsmodels
 scikit-learn # For RandomForestRegressor and general ML utilities
 joblib # For model persistence
+matplotlib
+seaborn
