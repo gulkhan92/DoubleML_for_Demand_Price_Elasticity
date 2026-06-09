@@ -3,7 +3,7 @@
 This analysis characterizes the high-dimensional feature space of the M5 Walmart dataset to validate the assumptions required for Causal Inference. The primary objective is to isolate the relationship between price shifts and quantity demanded while identifying the confounding variables that the Double Machine Learning (DML) framework must "partial out."
 
 ---
-## 1. Objective of Analysis
+## 1. Objectives of Analysis
 1. **Characterize Signal Strength**: Evaluate the frequency and magnitude of price changes (Treatment Variation).
 2. **Diagnose Endogeneity**: Identify correlations between price and historical demand (Lagged Sales).
 3. **Identify Confounding Factors**: Map the influence of external shocks (SNAP events, holidays) on sales volume.
@@ -74,7 +74,7 @@ These patterns highlight the importance of including time-based features and eve
 
 ---
 
-## 2. Project-Specific EDA: Demand Price Elasticity
+## 3. Project-Specific EDA: Demand Price Elasticity
 
 This section focuses on insights directly relevant to estimating the causal effect of price on demand.
 
@@ -82,9 +82,9 @@ This section focuses on insights directly relevant to estimating the causal effe
 
 This scatter plot, with a regression line, visually represents the naive correlation between `log_price` and `log_quantity`. We expect to see a downward-sloping trend, indicating that as price increases, quantity demanded decreases. The slope of this line would be the naive OLS elasticity. However, this plot often appears noisy due to unaddressed confounding, which DML aims to resolve.
 
-### Correlation Heatmap (Plot: `feature_correlation_heatmap.png`)
+### Correlation Heatmap (Plot: `correlation_heatmap.png`)
 
-This heatmap displays the pairwise correlations between the treatment (`log_price`), outcome (`log_quantity`), and key confounders (`month`, `snap_CA`, `snap_TX`, `snap_WI`, `lag_sales_1`).
+This heatmap displays the pairwise correlations between the treatment (`log_price`), outcome (`log_quantity`), and key confounders (`month`, `snap_CA`, `snap_TX`, `snap_WI`, `lag_sales_1`, `lag_sales_2`).
 
 **Observations:**
 *   **Confounder Identification**: High correlations between confounders (e.g., `month`, `snap_CA`) and both `log_price` and `log_quantity` would strongly suggest the presence of omitted variable bias in naive OLS. For instance, if `snap_CA` is positively correlated with `log_quantity` (more sales during SNAP weeks) and negatively correlated with `log_price` (Walmart offers discounts during SNAP weeks), it acts as a confounder.
@@ -92,6 +92,23 @@ This heatmap displays the pairwise correlations between the treatment (`log_pric
 
 ---
 
-## Conclusion of EDA
+## 4. Causal Diagnostics: Elasticity and Confounding
+
+### Price Volatility (Coefficient of Variation)
+A fundamental requirement for elasticity estimation is the presence of price variation. Items with "sticky prices" (zero change) provide no signal for the treatment effect.
+
+*   **Mean Price CV**: 0.0401
+*   **Median Price CV**: 0.0369
+*   **Sticky Prices**: 1,343 out of 14,370 item-store pairs exhibit zero price variation.
+
+### Endogeneity Check (Plot: `price_lag_sales_correlation.png`)
+This plot examines the correlation between `log_price` and `lag_sales_1`. Since retailers adjust prices based on past sales performance, this confirms the endogeneity of price, reinforcing the need for DML to disentangle the causal effect.
+
+### Departmental Distribution (Plot: `log_quantity_by_department.png`)
+The spread of sales volume across departments hints at potential heterogeneity in demand patterns and price sensitivities.
+
+---
+
+## 5. Conclusion of EDA
 
 The EDA confirms the complex nature of the M5 retail dataset, characterized by large scale, skewed sales distributions, strong temporal patterns, and clear indications of confounding. These observations strongly justify the choice of Double Machine Learning, which is designed to handle such high-dimensional data and complex relationships to isolate the true causal effect of price on demand. The EDA also provides initial visual and statistical cues that will be further explored and validated by the various robustness and falsification tests.
