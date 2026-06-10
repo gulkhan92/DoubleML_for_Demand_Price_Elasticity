@@ -79,8 +79,10 @@ These patterns highlight the importance of including time-based features and eve
 This section focuses on insights directly relevant to estimating the causal effect of price on demand.
 
 ### Log-Price vs Log-Quantity Scatter Plot (Plot: `price_quantity_correlation.png`)
-
-This scatter plot, with a regression line, visually represents the naive correlation between `log_price` and `log_quantity`. We expect to see a downward-sloping trend, indicating that as price increases, quantity demanded decreases. The slope of this line would be the naive OLS elasticity. However, this plot often appears noisy due to unaddressed confounding, which DML aims to resolve.
+The scatter plot reveals a dense "cloud" of data points with a visible, though noisy, negative slope.
+*   **Negative Correlation**: The red regression line trends downward, suggesting that the "Law of Demand" holds generally across the dataset.
+*   **Vertical Clustering**: Large vertical clusters at specific price points indicate that many items share common price tiers, but their sales vary wildly due to non-price factors (confounders).
+*   **Non-Linearity**: The dispersion suggests that a simple linear fit (OLS) will struggle to capture the true effect, as it will be pulled by the variance in demand that price cannot explain.
 
 ### Correlation Heatmap (Plot: `correlation_heatmap.png`)
 
@@ -88,6 +90,8 @@ This heatmap displays the pairwise correlations between the treatment (`log_pric
 
 **Observations:**
 *   **Confounder Identification**: High correlations between confounders (e.g., `month`, `snap_CA`) and both `log_price` and `log_quantity` would strongly suggest the presence of omitted variable bias in naive OLS. For instance, if `snap_CA` is positively correlated with `log_quantity` (more sales during SNAP weeks) and negatively correlated with `log_price` (Walmart offers discounts during SNAP weeks), it acts as a confounder.
+*   **Demand Momentum**: There is a strong positive correlation (approx. 0.6) between `log_quantity` and its lags (`lag_sales_1`, `lag_sales_2`). This suggests that last week's sales are one of the strongest predictors of this week's sales, and failing to control for this "momentum" would lead to biased elasticity estimates.
+*   **Price-Lag Relationship**: A non-negligible correlation between `log_price` and `lag_sales_1` suggests that current prices are potentially adjusted based on past performance—a clear sign of endogeneity.
 *   **Multicollinearity**: High correlations among control variables themselves might indicate multicollinearity, which tree-based models can handle better than linear models.
 
 ---
@@ -100,12 +104,17 @@ A fundamental requirement for elasticity estimation is the presence of price var
 *   **Mean Price CV**: 0.0401
 *   **Median Price CV**: 0.0369
 *   **Sticky Prices**: 1,343 out of 14,370 item-store pairs exhibit zero price variation.
+*   **Plot Analysis (`price_cv_distribution.png`)**: The histogram of Price CV peaks sharply around 0.03-0.05. This tells us that most products experience price changes of roughly 3-5% relative to their mean. This provides a healthy "experimental signal" for DML to learn from, as there is sufficient variation to distinguish price effects from noise.
 
 ### Endogeneity Check (Plot: `price_lag_sales_correlation.png`)
-This plot examines the correlation between `log_price` and `lag_sales_1`. Since retailers adjust prices based on past sales performance, this confirms the endogeneity of price, reinforcing the need for DML to disentangle the causal effect.
+This plot shows a slight upward-sloping regression line between `lag_sales_1` and `log_price`.
+*   **Observation**: Higher sales in the previous week appear to be followed by slightly higher prices in the current week.
+*   **Suggestion**: This suggests a "reactive pricing" strategy where Walmart may be capturing consumer surplus on high-demand items. This relationship is the definition of endogeneity: the "Treatment" (Price) is determined by the "Outcome" history, which creates a loop that standard OLS cannot break.
 
 ### Departmental Distribution (Plot: `log_quantity_by_department.png`)
-The spread of sales volume across departments hints at potential heterogeneity in demand patterns and price sensitivities.
+The boxplot shows significant variation in `log_quantity` medians and interquartile ranges across departments (IDs 0 through 6).
+*   **High-Volume Depts**: Some departments show consistently higher sales and tighter distributions.
+*   **Heterogeneity Signal**: The difference in baseline demand levels suggests that shoppers' price sensitivity likely differs across these categories (e.g., staples vs. discretionary items). This justifies the use of $X$ (effect modifiers) in DML to estimate segment-specific elasticities.
 
 ---
 
